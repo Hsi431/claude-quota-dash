@@ -78,11 +78,13 @@ BLINK_FOR = {"tall": 0.20, "mid": 0.20, "tired": 0.45, "spent": 0.9}
 
 
 def posture_for(pct):
-    if pct < 50:
+    """Bands line up with the number's colour, so the crab lies down on the same
+    step where the digits turn red."""
+    if pct < 61:
         return "tall"
-    if pct < 80:
+    if pct < 81:
         return "mid"
-    if pct < 92:
+    if pct < 91:
         return "tired"
     return "spent"
 

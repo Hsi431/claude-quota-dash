@@ -63,6 +63,17 @@ def _pct(value):
     return max(0, min(100, int(round(float(value or 0)))))
 
 
+def _level(pct):
+    """Colour by how full a quota is, not by whether it is ahead of an even
+    burn. Pace flickers: it flips at a line nobody can see, and on a five-hour
+    window that refills by itself it means nothing anyway."""
+    if pct >= 91:
+        return COLORS["ALARM"]
+    if pct >= 61:
+        return COLORS["ACCENT"]
+    return COLORS["TEXT"]
+
+
 def _limit(d, name):
     return d.get("rate_limits", {}).get(name, {})
 
@@ -226,10 +237,8 @@ def page_quota(d):
         limit = _limit(d, name)
         reset = limit.get("resets_at", 0)
         pct = _pct(limit.get("used_percentage"))
-        pace = 100 * (now - (reset - window)) / window if reset else 0
         label = "7 DAY" if window > 24 * 3600 else "5 HOUR"
-        colour = COLORS["ALARM"] if pct >= 90 else COLORS["ACCENT"] if pct > pace else COLORS["TEXT"]
-        _quota_block(image, draw, top, label, pct, reset, now, window, colour)
+        _quota_block(image, draw, top, label, pct, reset, now, window, _level(pct))
     draw.line((8, 92, 205, 92), fill=COLORS["HAIRLINE"])
     draw.line((214, 28, 214, 160), fill=COLORS["HAIRLINE"])
 
@@ -256,7 +265,7 @@ def page_five(d):
     _text(draw, (190, 36), "UNTIL RESET", "label", COLORS["TEXT_DIM"])
     _text(draw, (190, 50), f"AT {_ts_text(reset)}", "value", COLORS["TEXT_FAINT"])
 
-    fill_color = COLORS["ALARM"] if used > 85 else COLORS["ACCENT"]
+    fill_color = _level(used) if used >= 61 else COLORS["ACCENT"]
     # The percentage sits above the bar, not on it: inside the bar its colour has
     # to flip exactly where the fill edge passes under the glyphs.
     _text(draw, (312, 76), f"{used}%", "value", fill_color, anchor="rs")
@@ -293,8 +302,7 @@ def page_context(d):
     pct = _pct(context.get("used_percentage"))
 
     _text(draw, (8, 28), "CONTEXT USED", "label", COLORS["TEXT_DIM"])
-    _text(draw, (8, 74), f"{pct}%", "big",
-          COLORS["ALARM"] if pct >= 90 else COLORS["ACCENT"], anchor="ls")
+    _text(draw, (8, 74), f"{pct}%", "big", _level(pct), anchor="ls")
     _text(draw, (312, 56), f"{_tokens(tokens)} / {_tokens(size)}", "value",
           COLORS["TEXT"], anchor="ra")
 

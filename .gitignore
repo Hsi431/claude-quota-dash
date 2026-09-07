@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 *.sock
+
+# Handoffs are short-lived working notes, not part of the project.
+docs/internal/
