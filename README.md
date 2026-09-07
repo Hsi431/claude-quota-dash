@@ -10,10 +10,10 @@ breathes), `5 HOUR` (countdown, bar, and the burn curve for the current window),
 mode), and `CACHE` (hit rate, what a cold rebuild would cost, last miss, spend).
 Button 1 goes back a page, Button 2 forward. Backlight is `quota bri 0-255`.
 
-`clawdlet.py` is deliberately not in this repository. It borrows Clawd's
-geometry from a project that carries no licence, so it lives only on the machine
-that has that project checked out. Without it the `QUOTA` page simply has no
-crab and everything else is unchanged.
+The crab in `crab.py` is drawn here, not borrowed. Its posture follows the
+seven-day quota -- claws up while there is room, hanging as the week burns down,
+flat on the sand near the end -- so the column beside the numbers says something
+the numbers do not.
 
 Small text is drawn without anti-aliasing -- at this pixel pitch the grey edge
 pixels are most of a glyph -- while the two large sizes keep it.

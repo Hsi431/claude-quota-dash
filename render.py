@@ -6,18 +6,15 @@ import time
 
 from PIL import Image, ImageDraw, ImageFont
 
-try:
-    import clawdlet
-except ImportError:              # the crab is optional; see README
-    clawdlet = None
+import crab
 
 
 W, H = 320, 170
 COLORS = {
     "BG": "#0A0A0B", "SURFACE": "#14151A", "HAIRLINE": "#262931",
     "GRID": "#1F2229", "TEXT": "#EDEAE6", "TEXT_DIM": "#8B8880",
-    "TEXT_FAINT": "#55534F", "ACCENT": "#D97757", "COOL": "#6E9E8C",
-    "ALARM": "#E05252",
+    "TEXT_FAINT": "#55534F", "ACCENT": "#EA5C27", "COOL": "#6E9E8C",
+    "ALARM": "#C4162E",
 }
 FONT_DIR = "/usr/share/fonts/truetype/jetbrains-mono"
 FONTS = {
@@ -35,7 +32,7 @@ def _font(name):
 
 SMOOTH = {"hero", "big"}         # sizes with enough pixels to carry a soft edge
 
-_CRAB = clawdlet.Clawdlet() if clawdlet else None
+_CRAB = crab.Crab()
 
 
 def _crisp(image):
@@ -236,10 +233,12 @@ def page_quota(d):
     draw.line((8, 92, 205, 92), fill=COLORS["HAIRLINE"])
     draw.line((214, 28, 214, 160), fill=COLORS["HAIRLINE"])
 
-    crab = _CRAB.frame(time.monotonic(), 5, 90, 140) if _CRAB else None
-    if crab is not None:
-        tint = Image.new("RGB", (90, 140), COLORS["ACCENT"])
-        image.paste(tint, (222, 24), Image.fromarray(crab).convert("1"))
+    # The crab carries the seven-day number in its posture, which is the one
+    # thing the digits next to it cannot do.
+    fb = _CRAB.frame(time.monotonic(), _pct(_limit(d, "seven_day").get("used_percentage")),
+                     5, 90, 140)
+    tint = Image.new("RGB", (90, 140), COLORS["ACCENT"])
+    image.paste(tint, (222, 24), Image.fromarray(fb).convert("1"))
     return image
 
 

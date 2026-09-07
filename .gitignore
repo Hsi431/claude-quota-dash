@@ -2,7 +2,3 @@
 __pycache__/
 *.pyc
 *.sock
-
-# Not ours to redistribute: imports Clawd's geometry from a repo with no
-# licence. Kept out of the repo so this project stays publishable.
-clawdlet.py
