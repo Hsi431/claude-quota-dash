@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+import os
+import socket
+import sys
+
+SOCK = os.path.join(os.path.dirname(os.path.realpath(__file__)), "quota.sock")
+COMMANDS = {"page": 1, "bri": 1, "next": 0, "prev": 0, "status": 0}
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
+        return 0
+    command = " ".join(sys.argv[1:])
+    if sys.argv[1] == "page" and (len(sys.argv) != 3 or sys.argv[2] not in ("1", "2", "3", "4")):
+        return 0
+    if sys.argv[1] == "bri":
+        if len(sys.argv) != 3:
+            return 0
+        try:
+            if not 0 <= int(sys.argv[2]) <= 255:
+                return 0
+        except ValueError:
+            return 0
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(2.0)
+            client.connect(SOCK)
+            client.sendall((command + "\n").encode())
+            reply = client.recv(256).decode(errors="replace").strip()
+    except OSError:
+        return 0
+    if reply:
+        print(reply)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

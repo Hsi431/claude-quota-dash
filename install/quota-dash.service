@@ -1,0 +1,13 @@
+[Unit]
+Description=Claude quota dashboard
+After=default.target
+
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/usr/bin/python3 %h/quota-dash/daemon.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
