@@ -37,7 +37,7 @@ Claude Code 自己不會寫那兩個檔。狀態列 hook 是唯一觸發夠頻�
 在 `~/.claude/settings.json` 裡:
 
 ```json
-"statusLine": {"type": "command", "command": "~/quota-dash/install/statusline-sampler.sh"}
+"statusLine": {"type": "command", "command": "~/claude-quota-dash/install/statusline-sampler.sh"}
 ```
 
 已經有自己的狀態列?那就留著,把那支腳本裡 `RECORD` 兩個標記中間那段貼到你自己的最前面。

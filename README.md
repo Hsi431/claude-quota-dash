@@ -42,7 +42,7 @@ forever**, which is easy to install and hard to diagnose.
 In `~/.claude/settings.json`:
 
 ```json
-"statusLine": {"type": "command", "command": "~/quota-dash/install/statusline-sampler.sh"}
+"statusLine": {"type": "command", "command": "~/claude-quota-dash/install/statusline-sampler.sh"}
 ```
 
 Already have a status line you like? Keep it, and copy the block between the

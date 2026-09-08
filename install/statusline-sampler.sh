@@ -9,7 +9,7 @@
 # Point Claude Code at this script -- in ~/.claude/settings.json:
 #
 #     "statusLine": {"type": "command",
-#                    "command": "~/quota-dash/install/statusline-sampler.sh"}
+#                    "command": "~/claude-quota-dash/install/statusline-sampler.sh"}
 #
 # If you already have a status line of your own, keep it and copy the block
 # between the RECORD markers to the top of it instead; everything after the
