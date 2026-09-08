@@ -1,5 +1,7 @@
 # Claude quota dashboard
 
+[繁體中文說明](README.zh-TW.md)
+
 A LilyGO T-Display-S3 on the desk showing how much Claude Code quota is left.
 
 ![The quota page](docs/images/page1-quota.png)
@@ -9,8 +11,6 @@ The host does all the work: it reads `~/.claude/usage-now.json` and
 that changed to RGB565, and pushes them down the USB serial link. The firmware
 is deliberately a dumb rectangle receiver, so changing the layout is saving a
 file, not reflashing a board.
-
-[繁體中文說明](README.zh-TW.md)
 
 ## The four pages
 

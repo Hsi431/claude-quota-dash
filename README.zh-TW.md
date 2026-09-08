@@ -1,5 +1,7 @@
 # Claude 額度儀表板
 
+[English](README.md)
+
 桌上一塊 LilyGO T-Display-S3,顯示 Claude Code 的額度還剩多少。
 
 ![額度頁](docs/images/page1-quota.png)
@@ -7,8 +9,6 @@
 所有工作都在電腦這端:讀 `~/.claude/usage-now.json` 與 `usage-history.jsonl`,
 用 Pillow 把每一個像素畫出來,只把有變動的矩形轉成 RGB565 從 USB 序列埠推過去。
 韌體刻意做得很笨,只負責收矩形貼上去,所以**改版面是存檔,不是重燒板子**。
-
-[English](README.md)
 
 ## 四個頁面
 
