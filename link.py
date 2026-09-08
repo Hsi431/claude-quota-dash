@@ -9,16 +9,33 @@ import numpy as np
 import serial
 
 
-BOARD_MAC = "EC:DA:3B:9D:77:38"
-PORT_GLOB = f"/dev/serial/by-id/*Espressif*JTAG*{BOARD_MAC}*-if00"
+PORT_ENV = "QUOTA_DASH_PORT"
+PORT_GLOB = "/dev/serial/by-id/*Espressif*JTAG*-if00"
 BAUD = 115200
 WIDTH, HEIGHT = 320, 170
 
 
 def find_port():
+    """The board's own path, or the one Espressif port on this machine.
+
+    Every ESP32 with native USB-JTAG enumerates as 303a:1001, so a second one
+    on the same desk is indistinguishable by VID:PID -- only the MAC in the
+    by-id path tells them apart, and that is per board. So: pick the port when
+    there is exactly one, and ask rather than guess when there is not.
+    """
+    override = os.environ.get(PORT_ENV)
+    if override:
+        return override
     found = sorted(glob.glob(PORT_GLOB))
     if not found:
-        raise FileNotFoundError(f"no T-Display-S3 with MAC {BOARD_MAC}")
+        raise FileNotFoundError(
+            f"no Espressif USB-JTAG port matching {PORT_GLOB} -- plug the board in, "
+            f"or set {PORT_ENV} to its device path")
+    if len(found) > 1:
+        listing = "".join(f"\n  {path}" for path in found)
+        raise FileNotFoundError(
+            f"{len(found)} Espressif boards are plugged in, so set {PORT_ENV} to the "
+            f"T-Display-S3:{listing}")
     return found[0]
 
 

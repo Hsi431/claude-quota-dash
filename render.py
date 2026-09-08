@@ -17,12 +17,24 @@ COLORS = {
     "ALARM": "#C4162E",
 }
 FONT_DIR = "/usr/share/fonts/truetype/jetbrains-mono"
+
+
+def _load(file_name, size):
+    #  Pillow's own error here is "cannot open resource", which says nothing
+    #  about which font is missing or how to get it.
+    try:
+        return ImageFont.truetype(f"{FONT_DIR}/{file_name}", size)
+    except OSError:
+        raise SystemExit(f"{FONT_DIR}/{file_name} is missing -- install JetBrains Mono "
+                         "(Debian/Ubuntu: apt install fonts-jetbrains-mono)")
+
+
 FONTS = {
-    "hero": ImageFont.truetype(f"{FONT_DIR}/JetBrainsMono-Bold.ttf", 44),
-    "big": ImageFont.truetype(f"{FONT_DIR}/JetBrainsMono-Bold.ttf", 24),
-    "value": ImageFont.truetype(f"{FONT_DIR}/JetBrainsMono-Medium.ttf", 15),
-    "body": ImageFont.truetype(f"{FONT_DIR}/JetBrainsMono-Medium.ttf", 12),
-    "label": ImageFont.truetype(f"{FONT_DIR}/JetBrainsMono-Medium.ttf", 11),
+    "hero": _load("JetBrainsMono-Bold.ttf", 44),
+    "big": _load("JetBrainsMono-Bold.ttf", 24),
+    "value": _load("JetBrainsMono-Medium.ttf", 15),
+    "body": _load("JetBrainsMono-Medium.ttf", 12),
+    "label": _load("JetBrainsMono-Medium.ttf", 11),
 }
 
 
@@ -33,6 +45,26 @@ def _font(name):
 SMOOTH = {"hero", "big"}         # sizes with enough pixels to carry a soft edge
 
 _CRAB = crab.Crab()
+
+#  The crab is a redrawn nod to Anthropic's Clawd, so it is off unless asked
+#  for: `quota crab on` (or `touch` this file) puts it on the first page in
+#  place of the plain column, and the choice survives a restart.
+CRAB_FLAG = os.path.expanduser("~/.config/quota-dash/crab")
+
+
+def crab_enabled():
+    return os.path.exists(CRAB_FLAG)
+
+
+def set_crab(on):
+    if on:
+        os.makedirs(os.path.dirname(CRAB_FLAG), exist_ok=True)
+        open(CRAB_FLAG, "a").close()
+        return
+    try:
+        os.unlink(CRAB_FLAG)
+    except FileNotFoundError:
+        pass
 
 
 def _crisp(image):
@@ -242,13 +274,26 @@ def page_quota(d):
     draw.line((8, 92, 205, 92), fill=COLORS["HAIRLINE"])
     draw.line((214, 28, 214, 160), fill=COLORS["HAIRLINE"])
 
-    # The crab carries the seven-day number in its posture, which is the one
-    # thing the digits next to it cannot do.
-    fb = _CRAB.frame(time.monotonic(), _pct(_limit(d, "seven_day").get("used_percentage")),
-                     5, 90, 140)
-    tint = Image.new("RGB", (90, 140), COLORS["ACCENT"])
-    image.paste(tint, (222, 24), Image.fromarray(fb).convert("1"))
+    week = _pct(_limit(d, "seven_day").get("used_percentage"))
+    if crab_enabled():
+        # The crab carries the seven-day number in its posture, which is the
+        # one thing the digits next to it cannot do.
+        fb = _CRAB.frame(time.monotonic(), week, 5, 90, 140)
+        tint = Image.new("RGB", (90, 140), COLORS["ACCENT"])
+        image.paste(tint, (222, 24), Image.fromarray(fb).convert("1"))
+    else:
+        _week_column(draw, week)
     return image
+
+
+def _week_column(draw, pct):
+    """The week as a column of segments, for when the crab is not drawn."""
+    lit = int(round(pct / 10.0))
+    colour = _level(pct)
+    for index in range(10):
+        bottom = 156 - index * 13
+        draw.rectangle((248, bottom - 9, 286, bottom),
+                       fill=colour if index < lit else COLORS["GRID"])
 
 
 def page_five(d):

@@ -3,8 +3,12 @@
 Source: `espressif/arduino-esp32` `variants/lilygo_t_display_s3/pins_arduino.h`
 (fetched 2026-09-07). Board on this desk verified by esptool:
 ESP32-S3 (QFN56) rev v0.2, embedded PSRAM 8MB, flash 16MB (ef:4018),
-USB-Serial/JTAG, MAC `ec:da:3b:9d:77:38`, enumerates as `/dev/ttyACM1`
-(`/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_EC:DA:3B:9D:77:38-if00`).
+USB-Serial/JTAG, enumerates as `/dev/ttyACM*`, with a by-id path that carries
+the board's own MAC:
+`/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_<MAC>-if00`.
+Every native-USB ESP32 shares VID:PID `303a:1001`, so with two boards plugged in
+only that MAC tells them apart -- which is why `link.py` refuses to guess and
+asks for `QUOTA_DASH_PORT` instead.
 
 ## Display
 ST7789 IPS TFT, **170 x 320** native (portrait), 8-bit **i80 parallel** bus.

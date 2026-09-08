@@ -62,8 +62,13 @@ class Dashboard:
         if verb == "prev" and not arg:
             self.next_page(-1)
             return "OK"
+        if verb == "crab" and arg in ("on", "off"):
+            render.set_crab(arg == "on")
+            self.force = True
+            return "OK"
         if verb == "status" and not arg:
-            return f"PAGE {self.page} BRI {self.brightness}"
+            return (f"PAGE {self.page} BRI {self.brightness} "
+                    f"CRAB {'on' if render.crab_enabled() else 'off'}")
         return "ERR unknown command"
 
 
@@ -147,7 +152,9 @@ def run():
                 board.rect(x, y, w, h, rgb565(current.crop((x, y, x + w, y + h))))
                 dashboard.previous = pixels
                 dashboard.force = False
-            interval = ANIMATED_INTERVAL if dashboard.page == ANIMATED else IDLE_INTERVAL
+            # Only the crab moves; without it the first page is as still as the rest.
+            animating = dashboard.page == ANIMATED and render.crab_enabled()
+            interval = ANIMATED_INTERVAL if animating else IDLE_INTERVAL
             delay = interval - (time.monotonic() - started)
             if delay > 0:
                 time.sleep(delay)

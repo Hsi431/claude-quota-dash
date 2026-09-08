@@ -5,7 +5,9 @@ there is room, sagging as the week burns down, flat on the sand when it is
 nearly gone. That is the one thing the numbers beside it cannot show -- you can
 read 86% or you can glance at the crab and know how the week is going.
 
-The art here is mine, unlike the puck's, so it can live in the repository.
+The pixels are mine, drawn for this screen, but the character is a nod to
+Anthropic's Clawd -- which is why the dashboard leaves it off until asked
+(`quota crab on`).
 """
 import math
 import random
