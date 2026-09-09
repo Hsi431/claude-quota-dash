@@ -88,12 +88,28 @@ Environment=QUOTA_DASH_PORT=/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debu
     quota next / prev   same as the buttons
     quota bri 0-255     backlight
     quota crab on/off   the crab, see below
-    quota status        current page, backlight, crab
+    quota lang en/zh    interface language, see below
+    quota status        current page, backlight, crab, language
 
 If the host dies the firmware drops the backlight to 10% after 30 seconds
 without a frame. That is on purpose: the numbers left on the glass are stale,
 and a bright stale number is a lie. A dim screen means check
 `systemctl --user status quota-dash`.
+
+## Chinese
+
+![The five-hour page in Chinese](docs/images/page2-five-hour-zh.png)
+
+`quota lang zh` puts the labels in Chinese, `quota lang en` puts them back, and
+the choice survives a restart (it is the file `~/.config/quota-dash/lang`).
+Numbers, clock times, units and the model name stay as they are -- they read the
+same either way, and mixing two typefaces on one line costs more than it buys.
+
+Chinese needs more pixels than Latin at the same nominal size: an 11px label is
+a blot on a 1.9" panel. So labels grow to 16px and keep the soft edge that small
+Latin has to do without, and because that height has to come from somewhere, the
+three label-over-value stacks become single rows. It needs Noto Sans CJK
+(Debian/Ubuntu: `apt install fonts-noto-cjk`).
 
 ## The crab
 

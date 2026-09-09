@@ -62,13 +62,18 @@ class Dashboard:
         if verb == "prev" and not arg:
             self.next_page(-1)
             return "OK"
+        if verb == "lang" and arg in render.LANGUAGES:
+            render.set_language(arg)
+            self.force = True
+            return "OK"
         if verb == "crab" and arg in ("on", "off"):
             render.set_crab(arg == "on")
             self.force = True
             return "OK"
         if verb == "status" and not arg:
             return (f"PAGE {self.page} BRI {self.brightness} "
-                    f"CRAB {'on' if render.crab_enabled() else 'off'}")
+                    f"CRAB {'on' if render.crab_enabled() else 'off'} "
+                    f"LANG {render.language()}")
         return "ERR unknown command"
 
 

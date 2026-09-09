@@ -44,6 +44,87 @@ def _font(name):
 
 SMOOTH = {"hero", "big"}         # sizes with enough pixels to carry a soft edge
 
+#  Chinese needs more pixels than Latin at the same nominal size -- 11px labels
+#  come out as a blot on a 1.9" panel -- so the label and body sizes grow, and
+#  the three label-over-value stacks become single rows to pay for the height.
+CJK_FONT = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+CJK_INDEX = 3                    # Noto Sans CJK TC
+CJK_SIZES = {"hero": 44, "big": 24, "value": 15, "body": 14, "label": 16}
+#  Latin anchors measure from the ascender, which leaves a Chinese glyph sitting
+#  low enough to touch whatever is under it; the ink box is the honest top here.
+CJK_ANCHORS = {None: "lt", "ra": "rt"}
+_CJK_FONTS = {}
+
+
+def _cjk(name):
+    if name not in _CJK_FONTS:
+        try:
+            _CJK_FONTS[name] = ImageFont.truetype(CJK_FONT, CJK_SIZES[name], index=CJK_INDEX)
+        except OSError:
+            raise SystemExit(f"{CJK_FONT} is missing -- install Noto Sans CJK "
+                             "(Debian/Ubuntu: apt install fonts-noto-cjk)")
+    return _CJK_FONTS[name]
+
+
+LANG_FILE = os.path.expanduser("~/.config/quota-dash/lang")
+LANGUAGES = ("en", "zh")
+
+
+def language():
+    try:
+        with open(LANG_FILE) as handle:
+            code = handle.read().strip()
+    except OSError:
+        return "en"
+    return code if code in LANGUAGES else "en"
+
+
+def set_language(code):
+    os.makedirs(os.path.dirname(LANG_FILE), exist_ok=True)
+    with open(LANG_FILE, "w") as handle:
+        handle.write(code)
+
+
+#  Read once per frame in _base rather than per string: the file is the source
+#  of truth, but a page must not change language halfway down.
+_ACTIVE = "en"
+
+STRINGS = {
+    "quota": ("QUOTA", "額度"),
+    "five_hour": ("5 HOUR", "五小時"),
+    "seven_day": ("7 DAY", "七天"),
+    "context": ("CONTEXT", "上下文"),
+    "cache": ("CACHE", "快取"),
+    "stale": ("STALE {}", "過期 {}"),
+    "no_data": ("NO DATA", "無資料"),
+    "at": ("AT {}", "{} 重置"),
+    "in": ("IN {}", "剩 {}"),
+    "until_reset": ("UNTIL RESET", "距離重置"),
+    "hits_cap": ("HITS CAP {}", "{} 用完"),
+    "wont_hit_cap": ("WON'T HIT CAP", "不會用完"),
+    "used_left": ("{}% USED · {}% LEFT", "已用 {}% · 剩 {}%"),
+    "context_used": ("CONTEXT USED", "已用上下文"),
+    "model": ("MODEL", "模型"),
+    "thinking": ("THINKING", "思考"),
+    "fast": ("FAST", "快速"),
+    "cache_hit": ("CACHE HIT", "快取命中"),
+    "requests": ("{} REQ · {} MISS", "{} 次請求 · {} 次未中"),
+    "recache": ("REBUILD IF IT GOES COLD", "冷掉要重建"),
+    "tokens": ("{} TOK", "{} tok"),
+    "last_miss": ("LAST MISS", "上次未命中"),
+    "none": ("NONE", "無"),
+    "session_cost": ("${} SESSION", "本次 ${}"),
+    "today_cost": ("${} TODAY · {}M", "今日 ${} · {}M"),
+}
+
+
+def _t(key, *args):
+    return STRINGS[key][LANGUAGES.index(_ACTIVE)].format(*args)
+
+
+def _cjk_text(value):
+    return _ACTIVE != "en" and any(ord(char) > 0x2E80 for char in value)
+
 _CRAB = crab.Crab()
 
 #  The crab is a redrawn nod to Anthropic's Clawd, so it is off unless asked
@@ -74,12 +155,21 @@ def _crisp(image):
 
 
 def _text(draw, xy, value, size, color, anchor=None):
+    value = str(value)
+    if _cjk_text(value):
+        # Small Chinese needs the soft edge that small Latin has to do without.
+        draw.fontmode = "L"
+        draw.text(xy, value, font=_cjk(size), fill=color,
+                  anchor=CJK_ANCHORS.get(anchor, anchor))
+        return
     draw.fontmode = "L" if size in SMOOTH else "1"
-    draw.text(xy, str(value), font=_font(size), fill=color, anchor=anchor)
+    draw.text(xy, value, font=_font(size), fill=color, anchor=anchor)
 
 
 def _text_width(value, size):
-    return ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(str(value), font=_font(size))
+    value = str(value)
+    font = _cjk(size) if _cjk_text(value) else _font(size)
+    return ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(value, font=font)
 
 
 def _fit(value, size, max_width):
@@ -134,15 +224,18 @@ def _duration(seconds, compact=False):
 
 
 def _base(d, page, title):
+    global _ACTIVE
+    _ACTIVE = language()
     image = Image.new("RGB", (W, H), COLORS["BG"])
     draw = _crisp(image)
-    _text(draw, (8, 5), title, "label", COLORS["TEXT_DIM"])
+    top = 3 if _ACTIVE != "en" else 5
+    _text(draw, (8, top), _t(title), "label", COLORS["TEXT_DIM"])
     if page in (3, 4) and d.get("cwd"):
-        _text(draw, (78, 5), _fit(os.path.basename(d["cwd"]).upper(), "label", 130), "label",
+        _text(draw, (78, top), _fit(os.path.basename(d["cwd"]).upper(), "label", 130), "label",
               COLORS["TEXT_FAINT"])
     if d.get("stale"):
-        _text(draw, (283, 5), "STALE " + _duration(d["now_ts"] - d.get("mtime", d["now_ts"]),
-              compact=True), "label", COLORS["ALARM"], anchor="ra")
+        _text(draw, (283, top), _t("stale", _duration(d["now_ts"] - d.get("mtime", d["now_ts"]),
+              compact=True)), "label", COLORS["ALARM"], anchor="ra")
     for index, x in enumerate((289, 296, 303, 310), 1):
         draw.ellipse((x - 2, 8, x + 2, 12), fill=COLORS["ACCENT"] if index == page else COLORS["TEXT_FAINT"])
     draw.line((0, 21, 319, 21), fill=COLORS["HAIRLINE"])
@@ -203,7 +296,7 @@ def _draw_curve(image, d, key, start, end, box, grid_values, predict=False):
     mapped = [(left + (ts - start) * xscale, _plot_y(value, top, bottom), ts, value)
               for ts, value in points]
     if not mapped:
-        _text(draw, ((left + right) // 2, (top + bottom) // 2 - 6), "NO DATA", "label", COLORS["TEXT_FAINT"], anchor="mm")
+        _text(draw, ((left + right) // 2, (top + bottom) // 2 - 6), _t("no_data"), "label", COLORS["TEXT_FAINT"], anchor="mm")
         return None, None
 
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
@@ -252,24 +345,35 @@ def _draw_curve(image, d, key, start, end, box, grid_values, predict=False):
     return hit, predicted
 
 
+def _pair(draw, x, y, label, value, label_colour, value_colour):
+    """A label and its value: stacked in English, side by side in Chinese,
+    where 16px glyphs leave no room for a second row."""
+    if _ACTIVE == "en":
+        _text(draw, (x, y), label, "label", label_colour)
+        _text(draw, (x, y + 12), value, "value", value_colour)
+        return
+    _text(draw, (x, y + 8), label, "label", label_colour)
+    _text(draw, (x + _text_width(label, "label") + 10, y + 9), value, "value", value_colour)
+
+
 def _quota_block(image, draw, top, label, pct, reset, now, window, colour):
     """One quota: its label, the number that matters, and when it clears."""
-    _text(draw, (8, top), label, "label", COLORS["TEXT_DIM"])
+    _text(draw, (8, top if _ACTIVE == "en" else top - 3), label, "label", COLORS["TEXT_DIM"])
     _text(draw, (8, top + 48), f"{pct}%", "hero", colour, anchor="ls")
     weekday = window > 24 * 3600
     _text(draw, (100, top + 18), _ts_text(reset, weekday=weekday), "value", COLORS["TEXT"])
-    _text(draw, (100, top + 38), f"IN {_duration(reset - now, compact=True)}" if reset else "--",
+    _text(draw, (100, top + 38), _t("in", _duration(reset - now, compact=True)) if reset else "--",
           "label", COLORS["TEXT_FAINT"])
 
 
 def page_quota(d):
-    image, draw = _base(d, 1, "QUOTA")
+    image, draw = _base(d, 1, "quota")
     now = d.get("now_ts", 0)
     for top, name, window in ((30, "seven_day", 7 * 86400), (102, "five_hour", 5 * 3600)):
         limit = _limit(d, name)
         reset = limit.get("resets_at", 0)
         pct = _pct(limit.get("used_percentage"))
-        label = "7 DAY" if window > 24 * 3600 else "5 HOUR"
+        label = _t("seven_day" if window > 24 * 3600 else "five_hour")
         _quota_block(image, draw, top, label, pct, reset, now, window, _level(pct))
     draw.line((8, 92, 205, 92), fill=COLORS["HAIRLINE"])
     draw.line((214, 28, 214, 160), fill=COLORS["HAIRLINE"])
@@ -297,7 +401,7 @@ def _week_column(draw, pct):
 
 
 def page_five(d):
-    image, draw = _base(d, 2, "5 HOUR")
+    image, draw = _base(d, 2, "five_hour")
     limit = _limit(d, "five_hour")
     now, reset = d.get("now_ts", 0), limit.get("resets_at", 0)
     used = _pct(limit.get("used_percentage"))
@@ -307,8 +411,8 @@ def page_five(d):
     hours, minutes = left // 3600, (left % 3600) // 60
     countdown = f"{hours}H {minutes:02d}M" if hours else f"{minutes}M"
     _text(draw, (8, 62), countdown, "hero", COLORS["TEXT"], anchor="ls")
-    _text(draw, (190, 36), "UNTIL RESET", "label", COLORS["TEXT_DIM"])
-    _text(draw, (190, 50), f"AT {_ts_text(reset)}", "value", COLORS["TEXT_FAINT"])
+    _text(draw, (190, 36), _t("until_reset"), "label", COLORS["TEXT_DIM"])
+    _text(draw, (190, 50), _t("at", _ts_text(reset)), "value", COLORS["TEXT_FAINT"])
 
     fill_color = _level(used) if used >= 61 else COLORS["ACCENT"]
     # The percentage sits above the bar, not on it: inside the bar its colour has
@@ -322,11 +426,13 @@ def page_five(d):
     hit, _ = _draw_curve(image, d, "five", start, reset or now, (8, 108, 312, 146), (0, 50, 100), predict=True)
     draw.line((8, 150, 311, 150), fill=COLORS["HAIRLINE"])
     if hit is not None and hit <= (reset or now):
-        right, color = f"HITS CAP {_ts_text(hit)}", COLORS["ALARM"]
+        right, color = _t("hits_cap", _ts_text(hit)), COLORS["ALARM"]
     else:
-        right, color = "WON'T HIT CAP", COLORS["TEXT_DIM"]
-    _text(draw, (8, 156), f"{used}% USED · {100 - used}% LEFT", "body", COLORS["TEXT_DIM"])
-    _text(draw, (312, 156), right, "body", color, anchor="ra")
+        right, color = _t("wont_hit_cap"), COLORS["TEXT_DIM"]
+    # The bottom strip is 14px tall; a Chinese glyph needs all of it.
+    strip = 156 if _ACTIVE == "en" else 153
+    _text(draw, (8, strip), _t("used_left", used, 100 - used), "body", COLORS["TEXT_DIM"])
+    _text(draw, (312, strip), right, "body", color, anchor="ra")
     return image
 
 
@@ -340,13 +446,13 @@ def _tokens(value):
 
 
 def page_context(d):
-    image, draw = _base(d, 3, "CONTEXT")
+    image, draw = _base(d, 3, "context")
     context = d.get("context", {})
     size = context.get("context_window_size", 0) or 1
     tokens = context.get("total_input_tokens", 0) + context.get("total_output_tokens", 0)
     pct = _pct(context.get("used_percentage"))
 
-    _text(draw, (8, 28), "CONTEXT USED", "label", COLORS["TEXT_DIM"])
+    _text(draw, (8, 28), _t("context_used"), "label", COLORS["TEXT_DIM"])
     _text(draw, (8, 74), f"{pct}%", "big", _level(pct), anchor="ls")
     _text(draw, (312, 56), f"{_tokens(tokens)} / {_tokens(size)}", "value",
           COLORS["TEXT"], anchor="ra")
@@ -358,18 +464,19 @@ def page_context(d):
               fill=COLORS["ALARM"] if d.get("exceeds_200k_tokens") else COLORS["TEXT_DIM"])
     _text(draw, (tick, 108), "200K", "label", COLORS["TEXT_FAINT"], anchor="ma")
 
-    name = d.get("model", {}).get("display_name", "NO DATA")
+    name = d.get("model", {}).get("display_name", _t("no_data"))
     name, _, qualifier = name.partition(" (")
-    _text(draw, (8, 120), "MODEL", "label", COLORS["TEXT_DIM"])
-    _text(draw, (8, 132), _fit(name, "value", 200), "value", COLORS["TEXT"])
+    label = _t("model")
+    room = 200 if _ACTIVE == "en" else 200 - int(_text_width(label, "label")) - 10
+    _pair(draw, 8, 120, label, _fit(name, "value", room), COLORS["TEXT_DIM"], COLORS["TEXT"])
     if qualifier:
         _text(draw, (312, 133), qualifier.rstrip(")").upper(), "label", COLORS["TEXT_FAINT"],
               anchor="ra")
 
     draw.line((8, 150, 311, 150), fill=COLORS["HAIRLINE"])
-    modes = [("THINKING", d.get("thinking")),
+    modes = [(_t("thinking"), d.get("thinking")),
              (d.get("effort", {}).get("level", "").upper(), bool(d.get("effort", {}).get("level"))),
-             ("FAST", d.get("fast_mode"))]
+             (_t("fast"), d.get("fast_mode"))]
     chips = [m for m in modes if m[0]]
     cursor = 8
     for index, (label, enabled) in enumerate(chips):
@@ -382,37 +489,38 @@ def page_context(d):
 
 
 def page_cache(d):
-    image, draw = _base(d, 4, "CACHE")
+    image, draw = _base(d, 4, "cache")
     cache = d.get("cache", {})
     ratio = cache.get("hit_ratio", 0) or 0
     hit = _pct(ratio * 100 if ratio <= 1 else ratio)
 
-    _text(draw, (8, 28), "CACHE HIT", "label", COLORS["TEXT_DIM"])
+    _text(draw, (8, 28), _t("cache_hit"), "label", COLORS["TEXT_DIM"])
     _text(draw, (8, 74), f"{hit}%", "big",
           COLORS["COOL"] if hit >= 80 else COLORS["ACCENT"], anchor="ls")
-    _text(draw, (312, 56), f"{cache.get('requests', 0)} REQ · {cache.get('misses', 0)} MISS",
+    _text(draw, (312, 56), _t("requests", cache.get("requests", 0), cache.get("misses", 0)),
           "value", COLORS["TEXT"], anchor="ra")
 
-    _text(draw, (8, 88), "REBUILD IF IT GOES COLD", "label", COLORS["TEXT_DIM"])
-    _text(draw, (8, 100), f"{_tokens(cache.get('recache_tokens_if_cold'))} TOK", "value",
-          COLORS["TEXT"])
+    _pair(draw, 8, 88, _t("recache"), _t("tokens", _tokens(cache.get("recache_tokens_if_cold"))),
+          COLORS["TEXT_DIM"], COLORS["TEXT"])
     _text(draw, (312, 101), f"TTL {cache.get('ttl', '').upper() or '--'}", "label",
           COLORS["TEXT_FAINT"], anchor="ra")
 
-    _text(draw, (8, 120), "LAST MISS", "label", COLORS["TEXT_DIM"])
+    label = _t("last_miss")
     miss = cache.get("last_miss_cause")
+    room = 300 if _ACTIVE == "en" else 300 - int(_text_width(label, "label")) - 10
     if miss:
         at = cache.get("last_miss_at")
         ago = f" · {_duration(d.get('now_ts', 0) - at, compact=True)} AGO" if at else ""
-        _text(draw, (8, 132), _fit(f"{miss}{ago}".upper(), "value", 300), "value", COLORS["TEXT"])
+        _pair(draw, 8, 120, label, _fit(f"{miss}{ago}".upper(), "value", room),
+              COLORS["TEXT_DIM"], COLORS["TEXT"])
     else:
-        _text(draw, (8, 132), "NONE", "value", COLORS["TEXT_FAINT"])
+        _pair(draw, 8, 120, label, _t("none"), COLORS["TEXT_DIM"], COLORS["TEXT_FAINT"])
 
     cost = d.get("cost", {})
     draw.line((8, 150, 311, 150), fill=COLORS["HAIRLINE"])
-    _text(draw, (8, 154), f"${cost.get('total_cost_usd', 0):.2f} SESSION", "body",
+    _text(draw, (8, 154), _t("session_cost", f"{cost.get('total_cost_usd', 0):.2f}"), "body",
           COLORS["TEXT_DIM"])
-    _text(draw, (312, 154), f"${d.get('today_cost', 0):.2f} TODAY · "
-          f"{int(round(cost.get('total_duration_ms', 0) / 60000))}M", "body",
+    _text(draw, (312, 154), _t("today_cost", f"{d.get('today_cost', 0):.2f}",
+          int(round(cost.get("total_duration_ms", 0) / 60000))), "body",
           COLORS["TEXT_DIM"], anchor="ra")
     return image

@@ -78,11 +78,25 @@ Environment=QUOTA_DASH_PORT=/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debu
     quota next / prev   跟實體按鍵一樣
     quota bri 0-255     背光
     quota crab on/off   螃蟹,見下面
-    quota status        目前的頁面、背光、螃蟹狀態
+    quota lang en/zh    介面語言,見下面
+    quota status        目前的頁面、背光、螃蟹狀態、語言
 
 主機掛掉時,韌體會在 30 秒沒收到畫面後把背光降到 10%。**這是刻意的**:
 留在螢幕上的是過期數字,而亮著的過期數字會騙人。看到螢幕變暗,先查
 `systemctl --user status quota-dash`。
+
+## 中文介面
+
+![中文版的五小時頁](docs/images/page2-five-hour-zh.png)
+
+`quota lang zh` 把標籤換成中文,`quota lang en` 換回英文,設定重開機還在
+(就是 `~/.config/quota-dash/lang` 這個檔)。數字、時間、單位和模型名維持原樣 ——
+那些兩種語言讀起來一樣,而同一行混兩套字型付出的比拿到的多。
+
+同樣的字級,中文要的像素比英文多:11px 的標籤在 1.9 吋螢幕上就是一團墨。
+所以標籤放大到 16px,並且保留抗鋸齒(英文小字反而要關掉),
+而多出來的高度總得有地方來,原本三處「標籤在上、值在下」的堆疊就改成同一行。
+這需要 Noto Sans CJK 字型(Debian/Ubuntu:`apt install fonts-noto-cjk`)。
 
 ## 螃蟹
 
