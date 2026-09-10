@@ -169,17 +169,25 @@ LABEL_FLAG = os.path.expanduser("~/.config/quota-dash/label")
 #  session that dies mid-command does not leave the crab scuttling forever.
 _ACTIVITY = crab.DEFAULT_ACTIVITY
 _ACTIVITY_UNTIL = 0.0
+_HELD_UNTIL = 0.0
 ACTIVITY_LAPSE = 90.0
 
 
 def set_activity(name, hold=None):
-    """-> True if the name is one the crab knows. `hold` keeps it for that many
-    seconds instead of the usual lapse, for poses no hook will ever refresh."""
-    global _ACTIVITY, _ACTIVITY_UNTIL
+    """-> True if the name is one the crab knows. `hold` keeps the pose for that
+    many seconds and, until it expires, ignores anything the hooks push in.
+    Without that a hand-called pose is worthless: `cheer` and `stuck` are the two
+    no hook can decide, and the Stop hook fires a heartbeat later and wipes them.
+    A second explicit hold always wins, so a person is never locked out."""
+    global _ACTIVITY, _ACTIVITY_UNTIL, _HELD_UNTIL
     if name not in crab.ACTIVITIES:
         return False
+    now = time.monotonic()
+    if hold is None and now < _HELD_UNTIL:
+        return True
     _ACTIVITY = name
-    _ACTIVITY_UNTIL = time.monotonic() + (hold or ACTIVITY_LAPSE)
+    _ACTIVITY_UNTIL = now + (hold or ACTIVITY_LAPSE)
+    _HELD_UNTIL = now + hold if hold else 0.0
     return True
 
 
