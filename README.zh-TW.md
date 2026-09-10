@@ -134,6 +134,15 @@ Environment=QUOTA_DASH_PORT=/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debu
 `cheer` 和 `stuck` **刻意不接 hook**。每次 Stop 都歡呼等於沒有歡呼,
 而爬不出來的沮喪比沒有更糟。這兩個請在真的發生時自己叫。
 
+不過「讓你的 Claude 真的記得叫」是另一個問題,而且 hook 一樣解決不了:
+值得歡呼的那一刻是個判斷,不是一個事件,所以這條指示必須放在模型每場都會讀到的地方。
+README 不是那種地方。把它寫進你的 `CLAUDE.md`,或你這套設定裡每次都會載入的那份指示:
+
+> 桌上螃蟹的動作是 hook 在推,只有兩個例外。做完一件事**而且驗過**之後,
+> 跑 `quota pose cheer 30`。真的卡住、要停下來問人時,跑 `quota pose stuck 60`。
+
+不寫的話這兩個姿勢就永遠不會出現 —— 規則只活在沒人載入的文件裡,等於不存在。
+
 `quota props on` 會在螃蟹上下的空白處給每個動作配一個小道具:打字有鍵盤、
 跑起來身後有沙、等你回話時有對話泡泡、卡住時頭上下雨、睡覺時飄 Z。
 `quota label on` 則在下面用文字寫出來,跟著 `quota lang` 走中英文。

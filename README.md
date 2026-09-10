@@ -152,6 +152,19 @@ Claude Code's own hooks are what normally drive it. In `~/.claude/settings.json`
 every Stop hook means nothing, and a slump the crab cannot get out of means less
 than nothing. Call those two yourself, when they are true.
 
+Getting your Claude to actually do that is a separate problem, and hooks cannot
+solve it either: the moment worth cheering is a judgement, not an event, so the
+instruction has to live somewhere the model reads every session. A README is not
+that place. Put it in your `CLAUDE.md` -- or whatever your setup calls the
+instructions it loads every time:
+
+> The desk crab's activity comes from hooks, except two. When you finish
+> something **and have verified it**, run `quota pose cheer 30`. When you are
+> genuinely stuck and about to stop and ask, run `quota pose stuck 60`.
+
+Skip that and the two poses simply never fire, which is how you end up with a
+rule that exists only in documentation nobody loads.
+
 `quota props on` gives each activity a small object in the empty band above or
 below the crab: a keyboard to type on, sand streaking past a running crab, a
 speech bubble while it waits on you, a rain cloud when it is stuck, Z's when it
