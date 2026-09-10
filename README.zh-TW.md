@@ -78,8 +78,11 @@ Environment=QUOTA_DASH_PORT=/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debu
     quota next / prev   跟實體按鍵一樣
     quota bri 0-255     背光
     quota crab on/off   螃蟹,見下面
+    quota props on/off  給螃蟹的動作配道具,見下面
+    quota label on/off  在螃蟹下面用文字寫出牠在幹嘛
+    quota pose NAME     設定牠在幹嘛;`quota poses` 列出所有名字
     quota lang en/zh    介面語言,見下面
-    quota status        目前的頁面、背光、螃蟹狀態、語言
+    quota status        頁面、背光、螃蟹、道具、文字、語言、目前動作
 
 主機掛掉時,韌體會在 30 秒沒收到畫面後把背光降到 10%。**這是刻意的**:
 留在螢幕上的是過期數字,而亮著的過期數字會騙人。看到螢幕變暗,先查
@@ -105,6 +108,36 @@ Environment=QUOTA_DASH_PORT=/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debu
 `quota crab on` 會把數字旁邊那根長條換成一隻螃蟹,牠的姿態跟著 7 天額度走:
 還有餘裕時舉著螯站直,一週燒下去就慢慢垮,快用完時整隻趴在沙上。牠會呼吸、眨眼、東張西望。
 這個設定會留著,重開機也還在(就是 `~/.config/quota-dash/crab` 這個檔)。
+
+### 牠在幹嘛
+
+姿態上面還疊了第二層:Claude Code 現在在做什麼。用 `quota pose write` 設定,
+`quota poses` 會列出八個名字(`idle`、`run`、`write`、`look`、`wave`、`cheer`、
+`stuck`、`sleep`)。這一層只動螯、眼睛和節奏,**絕不動高度** —— 高度背的是額度,
+那是旁邊的數字唯一講不出來的東西,所以不准被動作蓋掉。
+姿勢 90 秒沒更新會自己回到 `idle`,免得某個 session 中途死掉,螃蟹就永遠在那邊跑。
+
+平常是靠 Claude Code 的 hook 在推。寫在 `~/.claude/settings.json`:
+
+```json
+"PreToolUse": [
+  {"matcher": "Bash",
+   "hooks": [{"type": "command", "command": "/path/to/quota pose run"}]},
+  {"matcher": "Edit|Write",
+   "hooks": [{"type": "command", "command": "/path/to/quota pose write"}]}
+],
+"Stop": [
+  {"hooks": [{"type": "command", "command": "/path/to/quota pose idle"}]}
+]
+```
+
+`cheer` 和 `stuck` **刻意不接 hook**。每次 Stop 都歡呼等於沒有歡呼,
+而爬不出來的沮喪比沒有更糟。這兩個請在真的發生時自己叫。
+
+`quota props on` 會在螃蟹上下的空白處給每個動作配一個小道具:打字有鍵盤、
+跑起來身後有沙、等你回話時有對話泡泡、卡住時頭上下雨、睡覺時飄 Z。
+`quota label on` 則在下面用文字寫出來,跟著 `quota lang` 走中英文。
+兩個預設都是關的,而且都會留著,重開機還在。
 
 **預設是關的。** 因為牠是對 Clawd 的致敬 —— Clawd 是 Anthropic(做 Claude 的公司)的螃蟹吉祥物。
 這裡的像素是我為這塊螢幕自己畫的,但角色是他們的。本專案與 Anthropic 無關,也未獲其背書。

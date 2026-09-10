@@ -4,7 +4,8 @@ import socket
 import sys
 
 SOCK = os.path.join(os.path.dirname(os.path.realpath(__file__)), "quota.sock")
-COMMANDS = {"page": 1, "bri": 1, "crab": 1, "lang": 1, "next": 0, "prev": 0, "status": 0}
+COMMANDS = {"page": 1, "bri": 1, "crab": 1, "props": 1, "label": 1, "lang": 1,
+            "pose": 1, "poses": 0, "next": 0, "prev": 0, "status": 0}
 
 
 def main():
@@ -13,9 +14,12 @@ def main():
     command = " ".join(sys.argv[1:])
     if sys.argv[1] == "page" and (len(sys.argv) != 3 or sys.argv[2] not in ("1", "2", "3", "4")):
         return 0
-    if sys.argv[1] == "crab" and (len(sys.argv) != 3 or sys.argv[2] not in ("on", "off")):
+    if (sys.argv[1] in ("crab", "props", "label")
+            and (len(sys.argv) != 3 or sys.argv[2] not in ("on", "off"))):
         return 0
     if sys.argv[1] == "lang" and (len(sys.argv) != 3 or sys.argv[2] not in ("en", "zh")):
+        return 0
+    if sys.argv[1] == "pose" and len(sys.argv) not in (3, 4):
         return 0
     if sys.argv[1] == "bri":
         if len(sys.argv) != 3:

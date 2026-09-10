@@ -88,8 +88,11 @@ Environment=QUOTA_DASH_PORT=/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debu
     quota next / prev   same as the buttons
     quota bri 0-255     backlight
     quota crab on/off   the crab, see below
+    quota props on/off  give the crab's activity a prop, see below
+    quota label on/off  name that activity in words under the crab
+    quota pose NAME     set the activity; `quota poses` lists the names
     quota lang en/zh    interface language, see below
-    quota status        current page, backlight, crab, language
+    quota status        page, backlight, crab, props, label, language, activity
 
 If the host dies the firmware drops the backlight to 10% after 30 seconds
 without a frame. That is on purpose: the numbers left on the glass are stale,
@@ -120,6 +123,41 @@ posture follows the seven-day quota: claws up while there is room, sagging as
 the week burns down, flat on the sand near the end. It breathes, blinks and
 looks around. The setting sticks across restarts (it is a file at
 `~/.config/quota-dash/crab`).
+
+### What it is doing
+
+A second layer rides over that posture: whatever Claude Code is up to right now.
+`quota pose write` sets it, and `quota poses` lists the eight names (`idle`,
+`run`, `write`, `look`, `wave`, `cheer`, `stuck`, `sleep`). An activity moves the
+claws, the eyes and the tempo, and never the height -- the height carries the
+quota, which is the one thing the digits beside it cannot show, so activity is
+not allowed to overwrite it. A pose lapses back to `idle` after 90 seconds, so a
+session that dies mid-command does not leave the crab scuttling forever.
+
+Claude Code's own hooks are what normally drive it. In `~/.claude/settings.json`:
+
+```json
+"PreToolUse": [
+  {"matcher": "Bash",
+   "hooks": [{"type": "command", "command": "/path/to/quota pose run"}]},
+  {"matcher": "Edit|Write",
+   "hooks": [{"type": "command", "command": "/path/to/quota pose write"}]}
+],
+"Stop": [
+  {"hooks": [{"type": "command", "command": "/path/to/quota pose idle"}]}
+]
+```
+
+`cheer` and `stuck` are deliberately not wired to any hook. A cheer fired by
+every Stop hook means nothing, and a slump the crab cannot get out of means less
+than nothing. Call those two yourself, when they are true.
+
+`quota props on` gives each activity a small object in the empty band above or
+below the crab: a keyboard to type on, sand streaking past a running crab, a
+speech bubble while it waits on you, a rain cloud when it is stuck, Z's when it
+sleeps. `quota label on` writes the activity underneath in words, following
+whatever `quota lang` is set to. Both are off by default, and both stick across
+restarts.
 
 It is **off by default** because it is a fond, hand-drawn nod to Clawd, the
 crab mascot of Anthropic, who make Claude. The pixels here are mine, drawn for

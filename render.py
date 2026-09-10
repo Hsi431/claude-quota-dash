@@ -15,6 +15,9 @@ COLORS = {
     "GRID": "#1F2229", "TEXT": "#EDEAE6", "TEXT_DIM": "#8B8880",
     "TEXT_FAINT": "#55534F", "ACCENT": "#EA5C27", "COOL": "#6E9E8C",
     "ALARM": "#C4162E",
+    #  The crab's claws, one step down from its shell, so a claw held out in
+    #  front reads as being in front rather than merging into the outline.
+    "ACCENT_SHADE": "#C24A1E",
 }
 FONT_DIR = "/usr/share/fonts/truetype/jetbrains-mono"
 
@@ -112,6 +115,14 @@ STRINGS = {
     "recache": ("REBUILD IF IT GOES COLD", "冷掉要重建"),
     "tokens": ("{} TOK", "{} tok"),
     "last_miss": ("LAST MISS", "上次未命中"),
+    "act_idle": ("IDLE", "待機"),
+    "act_run": ("RUNNING", "跑指令"),
+    "act_write": ("WRITING", "寫東西"),
+    "act_look": ("READING", "讀檔"),
+    "act_wave": ("WAITING", "等你"),
+    "act_cheer": ("DONE", "完成"),
+    "act_stuck": ("STUCK", "卡住"),
+    "act_sleep": ("ASLEEP", "睡了"),
     "none": ("NONE", "無"),
     "session_cost": ("${} SESSION", "本次 ${}"),
     "today_cost": ("${} TODAY · {}M", "今日 ${} · {}M"),
@@ -132,20 +143,85 @@ _CRAB = crab.Crab()
 #  place of the plain column, and the choice survives a restart.
 CRAB_FLAG = os.path.expanduser("~/.config/quota-dash/crab")
 
+#  Two things the crab can be given on top of its posture, each remembered the
+#  same way: a prop for the activity it is in (`quota props on`) and a word for
+#  that activity under the box (`quota label on`). Both off by default -- the
+#  point of the crab is that you read it without reading anything.
+PROPS_FLAG = os.path.expanduser("~/.config/quota-dash/props")
+
+#  (main, secondary) colour for each activity's prop. Props are not the crab, so
+#  they are painted in the panel's own greys and greens rather than its orange --
+#  a white keyboard under an orange crab, not an orange keyboard.
+PROP_COLOURS = {
+    "write": ("TEXT", "TEXT_FAINT"),      # bright keys on a dim desk
+    "run": ("TEXT_DIM", "TEXT_DIM"),
+    "look": ("COOL", "TEXT_FAINT"),
+    "wave": ("TEXT", "TEXT_DIM"),
+    "cheer": ("TEXT", "TEXT_DIM"),
+    "stuck": ("COOL", "TEXT_DIM"),        # cool rain out of a grey cloud
+    "sleep": ("TEXT_DIM", "TEXT_DIM"),
+}
+LABEL_FLAG = os.path.expanduser("~/.config/quota-dash/label")
+
+
+#  What Claude Code is doing right now, set by hooks (`quota pose run`). It is
+#  the second layer over the crab's quota posture, and it lapses on its own so a
+#  session that dies mid-command does not leave the crab scuttling forever.
+_ACTIVITY = crab.DEFAULT_ACTIVITY
+_ACTIVITY_UNTIL = 0.0
+ACTIVITY_LAPSE = 90.0
+
+
+def set_activity(name, hold=None):
+    """-> True if the name is one the crab knows. `hold` keeps it for that many
+    seconds instead of the usual lapse, for poses no hook will ever refresh."""
+    global _ACTIVITY, _ACTIVITY_UNTIL
+    if name not in crab.ACTIVITIES:
+        return False
+    _ACTIVITY = name
+    _ACTIVITY_UNTIL = time.monotonic() + (hold or ACTIVITY_LAPSE)
+    return True
+
+
+def activity():
+    if _ACTIVITY != crab.DEFAULT_ACTIVITY and time.monotonic() >= _ACTIVITY_UNTIL:
+        return crab.DEFAULT_ACTIVITY
+    return _ACTIVITY
+
 
 def crab_enabled():
     return os.path.exists(CRAB_FLAG)
 
 
-def set_crab(on):
+def _set_flag(path, on):
     if on:
-        os.makedirs(os.path.dirname(CRAB_FLAG), exist_ok=True)
-        open(CRAB_FLAG, "a").close()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        open(path, "a").close()
         return
     try:
-        os.unlink(CRAB_FLAG)
+        os.unlink(path)
     except FileNotFoundError:
         pass
+
+
+def set_crab(on):
+    _set_flag(CRAB_FLAG, on)
+
+
+def props_enabled():
+    return os.path.exists(PROPS_FLAG)
+
+
+def set_props(on):
+    _set_flag(PROPS_FLAG, on)
+
+
+def label_enabled():
+    return os.path.exists(LABEL_FLAG)
+
+
+def set_label(on):
+    _set_flag(LABEL_FLAG, on)
 
 
 def _crisp(image):
@@ -382,9 +458,20 @@ def page_quota(d):
     if crab_enabled():
         # The crab carries the seven-day number in its posture, which is the
         # one thing the digits next to it cannot do.
-        fb = _CRAB.frame(time.monotonic(), week, 5, 90, 140)
-        tint = Image.new("RGB", (90, 140), COLORS["ACCENT"])
-        image.paste(tint, (222, 24), Image.fromarray(fb).convert("1"))
+        # The box is wider than the crab so the activity layer has room to
+        # sway it without clipping a claw against the edge.
+        act = activity()
+        layers = _CRAB.frame(time.monotonic(), week, 5, 96, 140, act, props_enabled())
+        prop_colour, dim_colour = PROP_COLOURS.get(act, ("TEXT", "TEXT_FAINT"))
+        for name, colour in (("body", "ACCENT"), ("shade", "ACCENT_SHADE"),
+                             ("prop_dim", dim_colour), ("prop", prop_colour)):
+            mask = layers.get(name)
+            if mask is None or not mask.any():
+                continue
+            image.paste(Image.new("RGB", (96, 140), COLORS[colour]), (219, 24),
+                        Image.fromarray(mask).convert("1"))
+        if label_enabled():
+            _text(draw, (267, 146), _t("act_" + act), "label", COLORS["TEXT_DIM"], anchor="mt")
     else:
         _week_column(draw, week)
     return image

@@ -7,6 +7,7 @@ import time
 
 import numpy as np
 
+import crab
 import data
 import render
 from link import Board, rgb565
@@ -70,10 +71,27 @@ class Dashboard:
             render.set_crab(arg == "on")
             self.force = True
             return "OK"
+        if verb == "pose":
+            name, _, hold = arg.partition(" ")
+            try:
+                seconds = float(hold) if hold else None
+            except ValueError:
+                return "ERR pose NAME [seconds]"
+            if not render.set_activity(name, seconds):
+                return "ERR pose " + " ".join(sorted(crab.ACTIVITIES))
+            return "OK"
+        if verb == "poses" and not arg:
+            return " ".join(sorted(crab.ACTIVITIES))
+        if verb in ("props", "label") and arg in ("on", "off"):
+            (render.set_props if verb == "props" else render.set_label)(arg == "on")
+            self.force = True
+            return "OK"
         if verb == "status" and not arg:
             return (f"PAGE {self.page} BRI {self.brightness} "
                     f"CRAB {'on' if render.crab_enabled() else 'off'} "
-                    f"LANG {render.language()}")
+                    f"PROPS {'on' if render.props_enabled() else 'off'} "
+                    f"LABEL {'on' if render.label_enabled() else 'off'} "
+                    f"LANG {render.language()} ACT {render.activity()}")
         return "ERR unknown command"
 
 
