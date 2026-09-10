@@ -116,7 +116,7 @@ three label-over-value stacks become single rows. It needs Noto Sans CJK
 
 ## The crab
 
-![The quota page with the crab](docs/images/page1-quota-crab.png)
+![The crab moving through what Claude Code is doing](docs/images/crab-activity.gif)
 
 `quota crab on` replaces the column beside the numbers with a crab whose
 posture follows the seven-day quota: claws up while there is room, sagging as
@@ -125,6 +125,8 @@ looks around. The setting sticks across restarts (it is a file at
 `~/.config/quota-dash/crab`).
 
 ### What it is doing
+
+![Writing: the keyboard prop, and the label turned on](docs/images/page1-quota-crab.png)
 
 A second layer rides over that posture: whatever Claude Code is up to right now.
 `quota pose write` sets it, and `quota poses` lists the eight names (`idle`,

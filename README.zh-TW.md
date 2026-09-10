@@ -103,13 +103,15 @@ Environment=QUOTA_DASH_PORT=/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debu
 
 ## 螃蟹
 
-![開了螃蟹的額度頁](docs/images/page1-quota-crab.png)
+![螃蟹跟著 Claude Code 在做的事動](docs/images/crab-activity.gif)
 
 `quota crab on` 會把數字旁邊那根長條換成一隻螃蟹,牠的姿態跟著 7 天額度走:
 還有餘裕時舉著螯站直,一週燒下去就慢慢垮,快用完時整隻趴在沙上。牠會呼吸、眨眼、東張西望。
 這個設定會留著,重開機也還在(就是 `~/.config/quota-dash/crab` 這個檔)。
 
 ### 牠在幹嘛
+
+![寫東西:鍵盤道具,文字標籤也開著](docs/images/page1-quota-crab.png)
 
 姿態上面還疊了第二層:Claude Code 現在在做什麼。用 `quota pose write` 設定,
 `quota poses` 會列出八個名字(`idle`、`run`、`write`、`look`、`wave`、`cheer`、
