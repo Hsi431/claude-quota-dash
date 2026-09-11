@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 
+#include <esp_heap_caps.h>
+#include <esp_system.h>
 #include <stdlib.h>
 
 #define PROTO_VERSION 1
@@ -22,6 +24,12 @@ static String line;
 static uint8_t brightness = 255;
 static bool failsafeDimmed = false;
 static uint32_t lastRectAt = 0;
+// Diagnostics (2026-09-11): the host sees only silence when a RECT is lost, so
+// the board has to say for itself how long its last push took and how much
+// memory it had left when it did.
+static uint32_t lastRectMs = 0;
+static uint32_t rectCount = 0;
+static uint32_t rectFailures = 0;
 static int lastButton1 = HIGH;
 static int stableButton1 = HIGH;
 static uint32_t button1ChangedAt = 0;
@@ -46,7 +54,20 @@ static bool readPayload(uint8_t *dst, size_t want) {
         deadline = millis() + PAYLOAD_TIMEOUT_MS;
       }
     } else if ((int32_t)(millis() - deadline) >= 0) {
-      Serial.printf("ERR timeout got %u of %u\n", (unsigned)got, (unsigned)want);
+      // Whatever arrives late is pixels, not a command. Drop it here or the
+      // reader below parses it as text and every reply after this is skewed.
+      uint32_t drainUntil = millis() + 250;
+      size_t dropped = 0;
+      while ((int32_t)(millis() - drainUntil) < 0) {
+        while (Serial.available()) {
+          Serial.read();
+          dropped++;
+          drainUntil = millis() + 250;
+        }
+        yield();
+      }
+      Serial.printf("ERR timeout got %u of %u dropped %u\n",
+                    (unsigned)got, (unsigned)want, (unsigned)dropped);
       return false;
     }
     yield();
@@ -77,27 +98,41 @@ static void handleRect(const String &command) {
   uint16_t *pixels = (uint16_t *)ps_malloc(bytes);
   if (!pixels) pixels = (uint16_t *)malloc(bytes);
   if (!pixels) {
-    Serial.println("ERR no-memory");
+    Serial.printf("ERR no-memory want %u psram %lu block %u heap %lu\n",
+                  (unsigned)bytes, (unsigned long)ESP.getFreePsram(),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM),
+                  (unsigned long)ESP.getFreeHeap());
+    rectFailures++;
     return;
   }
+  uint32_t startedAt = millis();
   if (readPayload((uint8_t *)pixels, bytes)) {
     // The payload is already in the order the panel wants, byte for byte.
     // Converting it to native uint16 here only earns a second swap inside
     // pushImage, which lands every pixel half a pixel out and fringes edges.
     tft.pushImage(x, y, w, h, pixels);
     lastRectAt = millis();
+    lastRectMs = lastRectAt - startedAt;
+    rectCount++;
     if (failsafeDimmed) {
       failsafeDimmed = false;
       applyBrightness();
     }
     Serial.println("OK");
+  } else {
+    rectFailures++;
   }
   free(pixels);
 }
 
 static void handle(const String &command) {
   if (command == "PING") {
-    Serial.printf("PONG %d tdisplay\n", PROTO_VERSION);
+    Serial.printf("PONG %d tdisplay up=%lu rects=%lu fails=%lu lastrect=%lums "
+                  "heap=%lu psram=%lu psramblock=%u\n",
+                  PROTO_VERSION, (unsigned long)millis(), (unsigned long)rectCount,
+                  (unsigned long)rectFailures, (unsigned long)lastRectMs,
+                  (unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getFreePsram(),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
   } else if (command.startsWith("RECT ")) {
     handleRect(command);
   } else if (command.startsWith("BRI ")) {
@@ -151,6 +186,12 @@ void setup() {
   Serial.begin(115200);
   Serial.setTimeout(PAYLOAD_TIMEOUT_MS);
   lastRectAt = millis();
+  // A silent RECT and a board that rebooted mid-RECT look identical from the
+  // host. This line is how the host tells them apart.
+  delay(50);
+  Serial.printf("BOOT %d tdisplay reset=%d heap=%lu psram=%lu\n",
+                PROTO_VERSION, (int)esp_reset_reason(),
+                (unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getFreePsram());
 }
 
 void loop() {
@@ -165,6 +206,14 @@ void loop() {
     if (c == '\n') {
       line.trim();
       handle(line);
+      // Tried against a reply that sometimes sits unsent until the host's next
+      // write, which the host cannot tell apart from a board that died mid-RECT.
+      // Measured over a night: this does not fix it and does not even make it
+      // rarer - HWCDC::flush only waits for its own ring buffer, and what is
+      // already in the USB-Serial-JTAG FIFO still waits for the host. Kept only
+      // so the next person does not spend the night re-testing it; the fix that
+      // works is on the host side.
+      Serial.flush();
       line = "";
     } else if (c != '\r' && line.length() < 64) {
       line += c;
