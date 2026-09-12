@@ -62,6 +62,20 @@ ACTIVITIES = {
 }
 DEFAULT_ACTIVITY = "idle"
 
+#  Switching activity used to cut from one sine straight into another, and the
+#  switch is the one moment anybody looks up. The limbs slide across instead.
+#  The dashboard animates this page at 8 Hz, so a duration that is not a whole
+#  number of 125 ms frames is a duration that never happens. 0.12 s of wind-up
+#  was the first guess and it was worth exactly one frame.
+SETTLE = 0.375                   # three frames
+RELEASE = 0.125                  # one: a wound-up claw is let go, not eased
+
+#  Before a claw commits it moves the other way first, or the action reads as a
+#  jump cut. Seconds of wind-up, and the row offset to hold during it (positive
+#  is down). The shell takes no part in this: its height is the seven-day
+#  number, so a crouch is not available and the whole tell lives in the claws.
+ANTICIPATE = {"cheer": (0.25, 2), "stuck": (0.375, -1)}
+
 
 @functools.lru_cache(maxsize=None)
 def _grid(name, arm_l=0, arm_r=0, eye_dy=0, kick=0, shut=False):
@@ -306,6 +320,48 @@ class Crab:
         self._blink_at = 0.0
         self._glance_at = 0.0
         self._glance = 0
+        self._activity = None
+        self._switch_at = 0.0
+        self._stage = None
+        self._from = None
+        self._blend_at = 0.0
+        self._blend_for = SETTLE
+        self._last = None
+
+    def _settle(self, now, activity, arm_l, arm_r, kick, dx):
+        """Slide the limbs between activities instead of cutting, and wind the
+        claws up before the two activities anybody reads off this screen.
+
+        The shell is deliberately not here. Its height carries the seven-day
+        quota, so follow through and anticipation are only ever allowed to
+        borrow the claws and the legs.
+        """
+        if activity != self._activity:
+            self._activity, self._switch_at = activity, now
+        hold, rows = ANTICIPATE.get(activity, (0.0, 0))
+        winding = now - self._switch_at < hold
+        if winding:
+            arm_l = arm_r = rows
+        target = (arm_l, arm_r, kick, dx)
+
+        if (activity, winding) != self._stage:
+            self._stage = (activity, winding)
+            #  A wind-up is a pose to be struck, not eased into -- at three
+            #  frames per cycle a slide into it would eat the pose itself.
+            self._from, self._blend_at = (None if winding else self._last), now
+            self._blend_for = RELEASE if hold else SETTLE
+        if self._from is not None:
+            through = (now - self._blend_at) / self._blend_for
+            if through >= 1.0:
+                self._from = None
+            else:
+                #  Smoothstep, so the slide has no corner at either end; a claw
+                #  that snaps to rest is the thing this is here to remove.
+                through *= through * (3 - 2 * through)
+                target = tuple(int(round(was + (is_ - was) * through))
+                               for was, is_ in zip(self._from, target))
+        self._last = target
+        return target
 
     def _eyes(self, mode, posture, now, phase):
         """-> (blink, glance, row offset) for this activity's eye behaviour."""
@@ -355,6 +411,7 @@ class Crab:
         period, travel = BOB[posture]
         dy = int(round(travel * act["bob"] * math.sin(2 * math.pi * elapsed / period)))
         dx = int(round(act["sway"] * math.sin(phase + math.pi / 3))) if act["sway"] else 0
+        arm_l, arm_r, kick, dx = self._settle(now, activity, arm_l, arm_r, kick, dx)
 
         shell, claws = sprite(_grid(posture, arm_l, arm_r, eye_dy, kick,
                                     act["eyes"] == "shut"), blink=blink, glance=glance)
