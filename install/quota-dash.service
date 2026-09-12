@@ -5,6 +5,11 @@ After=default.target
 StartLimitIntervalSec=0
 
 [Service]
+# Without this the daemon's stdout and stderr are block-buffered when systemd
+# captures them, so the traceback of a dying process never reaches the journal
+# and a crash looks like a silent exit code 1. The link diagnostics count on
+# reaching the journal too.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 %h/claude-quota-dash/daemon.py
 Restart=always
 RestartSec=3
