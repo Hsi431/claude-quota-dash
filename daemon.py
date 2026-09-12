@@ -10,7 +10,9 @@ import numpy as np
 import crab
 import data
 import render
-from link import Board, rgb565
+import link
+import netlink
+from link import rgb565
 
 
 WIDTH, HEIGHT = 320, 170
@@ -134,12 +136,38 @@ def _poll_socket(server, dashboard):
 
 
 def run():
-    board = Board()
-    board.ping()
-    board.clear()
     dashboard = Dashboard()
-    server = _server()
     sent_brightness = dashboard.brightness
+
+    def is_net(board):
+        return isinstance(board.transport, netlink.SocketTransport)
+
+    def connect():
+        nonlocal sent_brightness
+        board = link.open_board()
+        if not is_net(board):
+            board.ping()
+            board.clear()
+            return board
+        while True:
+            try:
+                board.ping()
+                board.clear()
+            except (TimeoutError, OSError) as exc:
+                print(f"link: board went away: {exc}", flush=True)
+                try:
+                    board.close()
+                except (TimeoutError, OSError):
+                    pass
+                board = link.open_board()
+                continue
+            dashboard.previous = None
+            dashboard.force = True
+            sent_brightness = None
+            return board
+
+    board = connect()
+    server = _server()
     snapshot, snapshot_at = data.load(), time.monotonic()
     alive = True
 
@@ -161,26 +189,38 @@ def run():
                 elif event == "BTN 1":
                     dashboard.next_page(-1)
             _poll_socket(server, dashboard)
-            if dashboard.brightness != sent_brightness:
-                board.brightness(dashboard.brightness)
-                sent_brightness = dashboard.brightness
+            try:
+                if dashboard.brightness != sent_brightness:
+                    board.brightness(dashboard.brightness)
+                    sent_brightness = dashboard.brightness
 
-            if time.monotonic() - snapshot_at >= IDLE_INTERVAL:
-                snapshot, snapshot_at = data.load(), time.monotonic()
-            current = PAGES[dashboard.page - 1](snapshot)
-            x, y, w, h, pixels = _changed_rect(dashboard.previous, current)
-            if dashboard.force or x is not None:
-                if dashboard.force and dashboard.previous is not None:
-                    x, y, w, h = 0, 0, WIDTH, HEIGHT
-                board.rect(x, y, w, h, rgb565(current.crop((x, y, x + w, y + h))))
-                dashboard.previous = pixels
-                dashboard.force = False
-            # Only the crab moves; without it the first page is as still as the rest.
-            animating = dashboard.page == ANIMATED and render.crab_enabled()
-            interval = ANIMATED_INTERVAL if animating else IDLE_INTERVAL
-            delay = interval - (time.monotonic() - started)
-            if delay > 0:
-                time.sleep(delay)
+                if time.monotonic() - snapshot_at >= IDLE_INTERVAL:
+                    snapshot, snapshot_at = data.load(), time.monotonic()
+                current = PAGES[dashboard.page - 1](snapshot)
+                x, y, w, h, pixels = _changed_rect(dashboard.previous, current)
+                if dashboard.force or x is not None:
+                    if dashboard.force and dashboard.previous is not None:
+                        x, y, w, h = 0, 0, WIDTH, HEIGHT
+                    board.rect(x, y, w, h,
+                               rgb565(current.crop((x, y, x + w, y + h))))
+                    dashboard.previous = pixels
+                    dashboard.force = False
+                # Only the crab moves; without it the first page is as still as the rest.
+                animating = dashboard.page == ANIMATED and render.crab_enabled()
+                interval = ANIMATED_INTERVAL if animating else IDLE_INTERVAL
+                delay = interval - (time.monotonic() - started)
+                if delay > 0:
+                    time.sleep(delay)
+            except (TimeoutError, OSError) as exc:
+                if not is_net(board):
+                    raise
+                print(f"link: board went away: {exc}", flush=True)
+                try:
+                    board.close()
+                except (TimeoutError, OSError):
+                    pass
+                board = connect()
+                continue
     finally:
         server.close()
         try:

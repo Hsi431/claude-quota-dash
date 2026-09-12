@@ -8,12 +8,14 @@ import time
 
 import numpy as np
 import serial
+import netlink
 
 
 PORT_ENV = "QUOTA_DASH_PORT"
 PORT_GLOB = "/dev/serial/by-id/*Espressif*JTAG*-if00"
 BAUD = 115200
 WIDTH, HEIGHT = 320, 170
+CONFIG_PATH = os.path.expanduser("~/.config/quota-dash/net.conf")
 
 
 def find_port():
@@ -40,6 +42,45 @@ def find_port():
     return found[0]
 
 
+def load_config(path=None):
+    config_path = os.path.abspath(os.path.expanduser(
+        CONFIG_PATH if path is None else path))
+    config = {"transport": "serial", "bind": "0.0.0.0",
+              "port": netlink.DEFAULT_PORT, "token": ""}
+    try:
+        with open(config_path, encoding="utf-8") as stream:
+            for raw in stream:
+                line = raw.split("#", 1)[0].strip()
+                if not line:
+                    continue
+                key, separator, value = line.partition("=")
+                if not separator:
+                    continue
+                key, value = key.strip(), value.strip()
+                if key in ("transport", "bind", "token"):
+                    config[key] = value
+                elif key == "port":
+                    try:
+                        config[key] = int(value)
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"invalid port in {config_path}: {value}") from exc
+    except FileNotFoundError:
+        pass
+
+    override = os.environ.get("QUOTA_DASH_TRANSPORT")
+    if override is not None:
+        config["transport"] = override.strip()
+    if config["transport"] not in ("serial", "net"):
+        raise ValueError(
+            f"invalid transport in {config_path}: {config['transport']}")
+    if not 1 <= config["port"] <= 65535:
+        raise ValueError(f"invalid port in {config_path}: {config['port']}")
+    if config["transport"] == "net" and not config["token"]:
+        raise ValueError(f"net transport requires token in {config_path}")
+    return config
+
+
 def rgb565(image):
     """Convert an RGB PIL image/array to big-endian RGB565 bytes."""
     rgb = np.asarray(image, dtype=np.uint8)
@@ -51,7 +92,9 @@ def rgb565(image):
     return value.astype(">u2", copy=False).tobytes()
 
 
-class Board:
+class SerialTransport:
+    late_replies_possible = True
+
     def __init__(self, port=None):
         self.ser = serial.Serial()
         self.ser.port = port or find_port()
@@ -62,6 +105,23 @@ class Board:
         self.ser.open()
         time.sleep(0.2)
         self.ser.reset_input_buffer()
+
+    def write(self, data):
+        self.ser.write(data)
+
+    def flush(self):
+        self.ser.flush()
+
+    def readline(self):
+        return self.ser.readline()
+
+    def close(self):
+        self.ser.close()
+
+
+class Board:
+    def __init__(self, transport):
+        self.transport = transport
         self._responses = queue.Queue()
         self._buttons = queue.Queue()
         self._history = collections.deque(maxlen=200)
@@ -75,7 +135,7 @@ class Board:
     def _read_lines(self):
         while not self._stop.is_set():
             try:
-                line = self.ser.readline().decode(errors="replace").strip()
+                line = self.transport.readline().decode(errors="replace").strip()
             except (OSError, TypeError, serial.SerialException):
                 return
             if not line:
@@ -97,22 +157,25 @@ class Board:
     def _cmd(self, text, payload=b""):
         started = time.monotonic()
         with self._write_lock:
-            self.ser.write((text + "\n").encode())
+            self.transport.write((text + "\n").encode())
             for offset in range(0, len(payload), 4096):
-                self.ser.write(payload[offset:offset + 4096])
-            self.ser.flush()
+                self.transport.write(payload[offset:offset + 4096])
+            self.transport.flush()
         written = time.monotonic()
         deadline = written + 3.0
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 self._remember(started, written, None, text, len(payload), "deadline")
-                self._forensics(text, len(payload))
+                if self.transport.late_replies_possible:
+                    self._forensics(text, len(payload))
                 raise TimeoutError(f"timeout waiting for {text}")
             try:
                 reply = self._responses.get(timeout=remaining)
             except queue.Empty:
                 self._remember(started, written, None, text, len(payload), "silence")
+                if not self.transport.late_replies_possible:
+                    raise TimeoutError(f"timeout waiting for {text}") from None
                 late = self._collect_late(text)
                 if late is not None:
                     return late
@@ -134,8 +197,8 @@ class Board:
         missing reply falls through to the caller, which still dies."""
         try:
             with self._write_lock:
-                self.ser.write(b"PING\n")
-                self.ser.flush()
+                self.transport.write(b"PING\n")
+                self.transport.flush()
         except (OSError, serial.SerialException):
             return None
         answer = None
@@ -180,10 +243,10 @@ class Board:
                 break
         try:
             with self._write_lock:
-                self.ser.write((text + "\n").encode())
+                self.transport.write((text + "\n").encode())
                 for offset in range(0, len(payload), 4096):
-                    self.ser.write(payload[offset:offset + 4096])
-                self.ser.flush()
+                    self.transport.write(payload[offset:offset + 4096])
+                self.transport.flush()
         except (OSError, serial.SerialException):
             return None
         try:
@@ -257,8 +320,8 @@ class Board:
         """Diagnostics only: does the board still answer after a timeout?"""
         try:
             with self._write_lock:
-                self.ser.write(b"PING\n")
-                self.ser.flush()
+                self.transport.write(b"PING\n")
+                self.transport.flush()
         except (OSError, serial.SerialException) as exc:
             return f"the port is gone ({exc})"
         try:
@@ -294,6 +357,23 @@ class Board:
     def close(self):
         self._stop.set()
         try:
-            self.ser.close()
+            self.transport.close()
         finally:
             self._reader.join(timeout=0.3)
+
+
+_listener = None
+_listener_config = None
+
+
+def open_board():
+    global _listener, _listener_config
+    config = load_config()
+    if config["transport"] == "serial":
+        return Board(SerialTransport())
+
+    listener_config = (config["bind"], config["port"], config["token"])
+    if _listener is None or _listener_config != listener_config:
+        _listener = netlink.Listener(*listener_config)
+        _listener_config = listener_config
+    return Board(_listener.accept_board())

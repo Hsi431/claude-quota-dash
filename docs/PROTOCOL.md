@@ -3,6 +3,20 @@
 Newline-terminated ASCII commands at 115200 on the board's native USB CDC.
 `RECT` is followed immediately by a fixed-size raw binary payload.
 
+## Transports
+
+Serial is the default transport. Net mode uses TCP with the board as client and
+the host as server; the default port is 8782. The command language is identical
+on both.
+The board greets with `HELLO 1 tdisplay <token>`; the host replies `OK` or
+`ERR auth`.
+
+Serial-only configuration commands are `NET SET <key> <value>`, `NET SHOW`,
+`NET ON`, `NET OFF`, and `NET CLEAR`.
+
+The "Replies are not guaranteed" section applies only to serial transport;
+that fault is a property of USB-Serial-JTAG.
+
 | Command | Payload | Reply |
 |---|---|---|
 | `PING` | — | `PONG 1 tdisplay up=<ms> rects=<n> fails=<n> lastrect=<ms> heap=<bytes> psram=<bytes> psramblock=<bytes>` |
