@@ -29,6 +29,15 @@ def _dict(value):
     return value if isinstance(value, dict) else {}
 
 
+def _causes(value):
+    """last_miss_cause arrives as {"causes": [...]}, not a bare string."""
+    if isinstance(value, dict):
+        items = value.get("causes")
+        if isinstance(items, list):
+            return ", ".join(str(item) for item in items if item)
+    return _text(value)
+
+
 def _limit(value):
     value = _dict(value)
     return {
@@ -100,7 +109,7 @@ def _normal_now(value):
             "expires_at": _number(cache.get("expires_at")),
             "recache_tokens_if_cold": _number(cache.get("recache_tokens_if_cold")),
             "last_miss_at": cache.get("last_miss_at"),
-            "last_miss_cause": _text(cache.get("last_miss_cause")),
+            "last_miss_cause": _causes(cache.get("last_miss_cause")),
         },
         "fast_mode": bool(value.get("fast_mode", False)),
         "thinking": bool(thinking.get("enabled", False)),
