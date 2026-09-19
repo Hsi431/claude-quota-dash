@@ -314,9 +314,14 @@ def _base(d, page, title):
     draw = _crisp(image)
     top = 3 if _ACTIVE != "en" else 5
     _text(draw, (8, top), _t(title), "label", COLORS["TEXT_DIM"])
-    if page in (3, 4) and d.get("cwd"):
-        _text(draw, (78, top), _fit(os.path.basename(d["cwd"]).upper(), "label", 130), "label",
-              COLORS["TEXT_FAINT"])
+    if page in (3, 4):
+        # These pages show per-session numbers, and the payload is shared by every
+        # session -- the last status line refresh wins -- so name the session.
+        who = d.get("session_name") or os.path.basename(d.get("cwd", ""))
+        if who:
+            # Narrow when stale, which is drawn from the right and matters more.
+            _text(draw, (78, top), _fit(who.upper(), "label", 130 if d.get("stale") else 195),
+                  "label", COLORS["TEXT_FAINT"])
     if d.get("stale"):
         _text(draw, (283, top), _t("stale", _duration(d["now_ts"] - d.get("mtime", d["now_ts"]),
               compact=True)), "label", COLORS["ALARM"], anchor="ra")
