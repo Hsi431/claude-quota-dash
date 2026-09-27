@@ -35,15 +35,35 @@ LEG_COLS = (4, 6, 10, 12)
 ARM_ROWS = 3
 LEG_ROWS = 2
 
+#  Keep every animation duration on the daemon's 8 Hz clock. The daemon's
+#  ANIMATED_INTERVAL is 0.125 seconds, so one animation frame is one FRAME.
+FRAME = 0.125
+
 #  The arms ride up and down inside the body's own rows, exactly as the real one
 #  does; what changes with the week is how tall the body still stands.
 #  `breath` is (seconds, screen pixels) -- the travel is in final screen pixels,
 #  not grid cells, so it has to be large to read at all on a 140px-tall box.
 POSTURES = {
-    "tall":  dict(top=3, body=9, arm=2, eyes=2, splay=False, breath=(3.2, 8)),
-    "mid":   dict(top=4, body=9, arm=4, eyes=2, splay=False, breath=(3.8, 7)),
-    "tired": dict(top=5, body=8, arm=5, eyes=1, splay=True,  breath=(4.8, 5)),
-    "spent": dict(top=7, body=7, arm=4, eyes=1, splay=True,  breath=(6.5, 3)),
+    "tall":  dict(top=3, body=9, arm=2, eyes=2, splay=False, breath=(26 * FRAME, 8)),
+    "mid":   dict(top=4, body=9, arm=4, eyes=2, splay=False, breath=(30 * FRAME, 7)),
+    "tired": dict(top=5, body=8, arm=5, eyes=1, splay=True,  breath=(38 * FRAME, 5)),
+    "spent": dict(top=7, body=7, arm=4, eyes=1, splay=True,  breath=(52 * FRAME, 3)),
+}
+
+#  These activities pause at useful poses instead of cycling continuously.
+#  The index starts when the settle/release work for that activity is done.
+ACTION_FRAMES = {
+    "write": (
+        (6, 0), (0, 6), (6, 0), (0, 6), (6, 0), (0, 6), (0, 0), (0, 0),
+        (6, 0), (0, 6), (6, 0), (0, 6), (0, 0), (0, 0), (0, 0), (0, 0),
+    ),
+    "wave": (
+        (0, -5), (0, -3), (0, -5), (0, -3), (0, -4), (0, -4), (0, -4), (0, -4),
+        (0, -4), (0, -4), (0, -4), (0, -4), (0, -4), (0, -4), (0, -4), (0, -4),
+    ),
+    "cheer": (
+        (-4, -5), (-3, -4), (-4, -5), (-3, -4), (-4, -5), (-4, -5), (-4, -5), (-4, -5),
+    ),
 }
 
 #  The second layer. `arms` names how the two claws move, `reach` how far in
@@ -52,11 +72,11 @@ POSTURES = {
 #  crab shares nothing with the one on the round device.
 ACTIVITIES = {
     "idle":  dict(swing=None, arms="still", reach=0, eyes="idle",    bob=1.0, sway=0, kick=0),
-    "run":   dict(swing=0.40, arms="pump",  reach=3, eyes="forward", bob=1.9, sway=3, kick=1),
-    "write": dict(swing=0.50, arms="tap",   reach=6, eyes="down",    bob=0.5, sway=0, kick=0),
-    "look":  dict(swing=2.60, arms="still", reach=0, eyes="scan",    bob=1.0, sway=3, kick=0),
-    "wave":  dict(swing=0.46, arms="wave",  reach=4, eyes="forward", bob=1.2, sway=1, kick=0),
-    "cheer": dict(swing=0.36, arms="raise", reach=5, eyes="wide",    bob=2.6, sway=2, kick=1),
+    "run":   dict(swing=3 * FRAME, arms="pump",  reach=3, eyes="forward", bob=1.9, sway=3, kick=1),
+    "write": dict(swing=len(ACTION_FRAMES["write"]) * FRAME, arms="tap", reach=6, eyes="down", bob=0.5, sway=0, kick=0),
+    "look":  dict(swing=20 * FRAME, arms="still", reach=0, eyes="scan", bob=1.0, sway=3, kick=0),
+    "wave":  dict(swing=len(ACTION_FRAMES["wave"]) * FRAME, arms="wave", reach=4, eyes="forward", bob=1.2, sway=1, kick=0),
+    "cheer": dict(swing=len(ACTION_FRAMES["cheer"]) * FRAME, arms="raise", reach=5, eyes="wide", bob=2.6, sway=2, kick=1),
     "stuck": dict(swing=3.00, arms="droop", reach=5, eyes="down",    bob=0.5, sway=0, kick=0),
     "sleep": dict(swing=6.00, arms="droop", reach=2, eyes="shut",    bob=0.7, sway=0, kick=0),
 }
@@ -65,16 +85,15 @@ DEFAULT_ACTIVITY = "idle"
 #  Switching activity used to cut from one sine straight into another, and the
 #  switch is the one moment anybody looks up. The limbs slide across instead.
 #  The dashboard animates this page at 8 Hz, so a duration that is not a whole
-#  number of 125 ms frames is a duration that never happens. 0.12 s of wind-up
-#  was the first guess and it was worth exactly one frame.
-SETTLE = 0.375                   # three frames
-RELEASE = 0.125                  # one: a wound-up claw is let go, not eased
+#  number of 125 ms frames is a duration that never happens.
+SETTLE = 3 * FRAME               # three frames
+RELEASE = FRAME                  # one: a wound-up claw is let go, not eased
 
 #  Before a claw commits it moves the other way first, or the action reads as a
 #  jump cut. Seconds of wind-up, and the row offset to hold during it (positive
 #  is down). The shell takes no part in this: its height is the seven-day
 #  number, so a crouch is not available and the whole tell lives in the claws.
-ANTICIPATE = {"cheer": (0.25, 2), "stuck": (0.375, -1)}
+ANTICIPATE = {"cheer": (2 * FRAME, 2), "stuck": (3 * FRAME, -1)}
 
 
 @functools.lru_cache(maxsize=None)
@@ -141,7 +160,8 @@ ORDER = ("tall", "mid", "tired", "spent")
 
 BOB = {name: spec["breath"] for name, spec in POSTURES.items()}
 BLINK_EVERY = {"tall": (3.0, 8.0), "mid": (3.0, 8.0), "tired": (2.0, 5.0), "spent": (1.5, 4.0)}
-BLINK_FOR = {"tall": 0.20, "mid": 0.20, "tired": 0.45, "spent": 0.9}
+BLINK_FOR = {"tall": FRAME, "mid": FRAME, "tired": 4 * FRAME, "spent": 8 * FRAME}
+GLANCE_FOR = 10 * FRAME
 
 
 def posture_for(pct):
@@ -170,10 +190,10 @@ def _arms(kind, reach, phase):
         return 0, -reach + int(round(1.5 * swing))
     if kind == "raise":                  # both claws up, bouncing
         lift = -reach + int(round(swing))
-        return lift, lift
+        return lift + 1, lift
     if kind == "droop":                  # hanging, with just enough sway to live
         sag = reach + int(round(0.6 * swing))
-        return sag, sag
+        return sag, sag - 1
     return 0, 0
 
 
@@ -326,6 +346,7 @@ class Crab:
         self._from = None
         self._blend_at = 0.0
         self._blend_for = SETTLE
+        self._action_at = 0.0
         self._last = None
 
     def _settle(self, now, activity, arm_l, arm_r, kick, dx):
@@ -337,7 +358,11 @@ class Crab:
         borrow the claws and the legs.
         """
         if activity != self._activity:
+            previous = self._activity
             self._activity, self._switch_at = activity, now
+            hold = ANTICIPATE.get(activity, (0.0, 0))[0]
+            self._action_at = (now if previous is None else
+                               now + hold + (RELEASE if hold else SETTLE))
         hold, rows = ANTICIPATE.get(activity, (0.0, 0))
         winding = now - self._switch_at < hold
         if winding:
@@ -363,23 +388,26 @@ class Crab:
         self._last = target
         return target
 
-    def _eyes(self, mode, posture, now, phase):
+    def _eyes(self, mode, posture, now, phase, suppress_blink=False):
         """-> (blink, glance, row offset) for this activity's eye behaviour."""
         if mode == "shut":
             return False, 0, 0
         if mode == "down":
-            return self._idle_blink(posture, now), 0, 1
+            blink = False if suppress_blink else self._idle_blink(posture, now)
+            return blink, 0, 1
         if mode == "scan":               # reading: the eyes sweep left to right
-            return self._idle_blink(posture, now), int(round(math.sin(phase) * 1.4)), 0
+            blink = False if suppress_blink else self._idle_blink(posture, now)
+            return blink, int(round(math.sin(phase) * 1.4)), 0
         if mode == "wide":
             return False, 0, -1
         if mode == "forward":            # busy: it stares straight ahead
-            return self._idle_blink(posture, now), 0, 0
-        blink = self._idle_blink(posture, now)
+            blink = False if suppress_blink else self._idle_blink(posture, now)
+            return blink, 0, 0
+        blink = False if suppress_blink else self._idle_blink(posture, now)
         if posture == "spent":           # a spent crab has no energy to look around
             self._glance = 0
         elif now >= self._glance_at:
-            if now < self._glance_at + 1.3:
+            if now < self._glance_at + GLANCE_FOR:
                 self._glance = self._glance or random.choice((-1, 1))
             else:
                 self._glance_at = now + random.uniform(9.0, 22.0)
@@ -402,14 +430,27 @@ class Crab:
             self._blink_at = now + random.uniform(*BLINK_EVERY[posture])
             self._glance_at = now + random.uniform(9.0, 22.0)
         elapsed = now - self.t0
+        n = round(elapsed / FRAME)
 
-        phase = 2 * math.pi * elapsed / act["swing"] if act["swing"] else 0.0
-        arm_l, arm_r = _arms(act["arms"], act["reach"], phase)
-        blink, glance, eye_dy = self._eyes(act["eyes"], posture, now, phase)
+        phase = 2 * math.pi * n * FRAME / act["swing"] if act["swing"] else 0.0
+        changing = self._activity is not None and activity != self._activity
+        action_frames = ACTION_FRAMES.get(activity)
+        if action_frames:
+            if changing or now < self._action_at:
+                arm_l, arm_r = action_frames[0]
+            else:
+                action_n = round((now - self._action_at) / FRAME)
+                arm_l, arm_r = action_frames[action_n % len(action_frames)]
+        else:
+            arm_l, arm_r = _arms(act["arms"], act["reach"], phase)
+        blink, glance, eye_dy = self._eyes(
+            act["eyes"], posture, now, phase, suppress_blink=changing)
+        if changing and act["eyes"] != "shut":
+            blink = True
         kick = int(round(act["kick"] * math.sin(phase))) if act["kick"] else 0
 
         period, travel = BOB[posture]
-        dy = int(round(travel * act["bob"] * math.sin(2 * math.pi * elapsed / period)))
+        dy = int(round(travel * act["bob"] * math.sin(2 * math.pi * n * FRAME / period)))
         dx = int(round(act["sway"] * math.sin(phase + math.pi / 3))) if act["sway"] else 0
         arm_l, arm_r, kick, dx = self._settle(now, activity, arm_l, arm_r, kick, dx)
 
